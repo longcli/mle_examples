@@ -1,5 +1,7 @@
 
 
+library(tidyverse)
+
  
 
 #-----------------------------------
@@ -15,437 +17,293 @@ xs = rnorm(77, mean = mu_sample, sd = sd_sample)
 
 hist(x)
 
-logL.fn1 = function(z, u)
-{ln.fz = dnorm(z, mean = u, sd = 10, log = TRUE)}
+logL_fn1 = function(z, u){
+  ln_fz = dnorm(z, mean = u, sd = 10, log = TRUE)
+  return(ln_fz)
+}
 
- #ln.fz = -log(sqrt(2*pi)) - log(sigma) - (0.5/(sigma^2))*(z - u)^2
 
-mu_L = seq(50, 150, by=2)
+# ALTERNATE FUNCTION
+#ln.fz = -log(sqrt(2*pi)) - log(sigma) - (0.5/(sigma^2))*(z - u)^2
 
-lnL.mu_L = sapply(xs, logL.fn1, mu_L)
-lnL.sum = apply(lnL.mu, 1, sum)
 
-plot(mu_L, lnL.sum, type='l', 
-main="Log Likelihood Estimate of Mean", 
-xlab="Estimate of Mean", ylab="Log Likelihood")
-segments(x0=100, y0=min(lnL.sum), x1=100, y1=max(lnL.sum), col='red')
+# # BASE R APPROACH -----------------------------------------------------------
+# mu_L <- seq(50, 150, by = 2)
+# lnL_mu_L = sapply(xs, logL_fn1, mu_L)
+# lnL_sum = apply(lnL_mu_L, 1, sum)
+# 
+# plot(mu_L, lnL_sum, type='l', 
+#      main="Log Likelihood Estimate of Mean", 
+#      xlab="Estimate of Mean", ylab="Log Likelihood")
+# segments(x0=100, y0=min(lnL.sum), x1=100, y1=max(lnL.sum), col='red')
 
-mu.max = mu[lnL.sum==max(lnL.sum)]
+
+
+# TIDY R APPROACH -------------------------------------------------------------
+
+mu_L <- seq(50, 150, by = 2)
+sd_L <- sd_sample
+
+df_L <- as.data.frame(expand.grid(mu_sample, sd_sample, mu_L, sd_L, xs)) %>% 
+  rename(mu_sample = Var1, sd_sample = Var2, mu_L = Var3, sd_L = Var4, xs = Var5) %>% 
+  arrange(xs, mu_L, mu_sample, sd_sample, xs) %>% 
+  # calculate loglikelihood for each observation xs in each mu_L
+  mutate(lnL_mu_L = logL_fn1(xs, mu_L))
+
+
+with(df_L, table(mu_L))
+
+
+# loglikelihood for each mu_L
+df_L_sum <- df_L %>% 
+  group_by(mu_sample, sd_sample, mu_L, sd_L) %>% 
+  # puts sample data and logL data into nested df
+  nest() %>% 
+  group_by(mu_sample, sd_sample, mu_L, sd_L) %>% 
+  # sum of all loglikelihood values within each mu_L
+  mutate(lnL_sum = map(data, ~ sum(.x$lnL_mu_L)))
+
+
+
+plot_lnL_fn <- function(df_fn){
+  
+  # df_fn <- df_L_sum
+  # glimpse(df_fn)
+  # df_fn$lnL_sum
+  
+  muL_max <- df_fn[lnL_sum == max(lnL_sum), 'mu_L']
+  lnL_mu_max <- df_fn[lnL_sum == max(lnL_sum), 'lnL_sum']
+  lnL_mu_min <- df_fn[lnL_sum == min(lnL_sum), 'lnL_sum']
+  
+  
+  plot_mu <- ggplot(df_fn, aes(x = mu_L, y = unlist(lnL_sum))) +
+    geom_line() + 
+    geom_segment(x = muL_max[[1]], y = unlist(lnL_mu_min[[1]]), 
+                 xend = muL_max[[1]], yend = unlist(lnL_mu_max[[1]]), 
+                 color = 'red', linetype = 2) + 
+    ggtitle("Plot of loglikelihood for each value of mu_L", 
+            subtitle = paste("Max LogL occurs at mu = ", muL_max)) + 
+    ylab('Value of Loglikelihood') + 
+    xlab('Value of mu_L')
+  
+  return(plot_mu)
+  
+}
+
+
+plot_obj1 <- plot_lnL_fn(df_L_sum)
+plot(plot_obj1)
+
+
 
 
 
 # plot for specific mu and sd ------
 
 xmin1 <- mu_sample - 4*sd_sample
-xmin2 <- 100 - 4*sd_sample
-xmin <- min(xmin1, xmin2)
+# xmin2 <- 100 - 4*sd_sample
+# xmin <- min(xmin1, xmin2)
+xmin <- xmin1
 
 xmax1 = mu_sample + 4*sd_sample
-xmax2 = 100 + 4*sd_sample
-xmax <- max(xmax1, xmax2)
+# xmax2 = 100 + 4*sd_sample
+# xmax <- max(xmax1, xmax2)
+xmax <- xmax1
 
 
 xq <- seq(xmin, xmax, by = 0.1)
-xp <- dnorm(x = xq, mean = 100, sd = 10)
+xp <- dnorm(x = xq, mean = mu_sample, sd = sd_sample)
 
-plot(xq, xp, type = 'l')
-rug(x)
-vline()
-
-points(xs, rep(0, length(xs)), col='blue')
-
-points(xs, f.xs, col='red')
-
-segments(x0 = xs, y0 = rep(0, length(xs)), x1 = xs, y1 = f.xs, lty = "dotted")
+d_sample_dist <- data.frame(cbind(xq, xp))
 
 
+# select value of mu and sd from loglikelihood fittings
+# fmuL <- 80
+# fsdL <- 10
 
-?abline
+mle_params <- c(80, 10)  # mean, stdev
+
+fml_xs <- dnorm(x = xs, mean = mle_params[1], sd = mle_params[2])
+fml_L <- dnorm(x = xs, mean = mle_params[1], sd = mle_params[2], log = TRUE)
+
+d_plot_wlnL <- data.frame(cbind(xs, fml_xs, fml_L))
+
+
+# plot using Base R -----------------------------------------------------------
+
+# sum_lnL <- sum(dnorm(x = xs, mean = fmuL, sd = fsdL, log = TRUE))
+# 
+# plot(xq, xp, type = 'l')
+# points(x = xs, y = rep(0, length(xs)), col='blue')
+# points(x = xs, y = fml_xs, col='red')
+# segments(x0 = xs, y0 = rep(0, length(xs)), x1 = xs, y1 = fml_xs, lty = "dotted")
 
 
 
-#-----------------------------------
+# plot using ggplot2 function -------------------------------------------------
+
+plot_dist_lnL_fn <- function(df_sample_fn, df_fn2, ml_params_fn){
+
+  # TEST ONLY
+  # df_sample_fn <- d_sample_dist
+  # df_fn2 <- d_plot_wlnL
+  # ml_params_fn <- mle_params
+  
+  # df_sample with xq and xp is the sample distribution
+  # df_fn2 with xs and fml_xs is the likelihood distribution
+  
+  L_sum <- round(sum(df_fn2$fml_L), 2)
+  
+  
+  # use this to create distribution based on likelihood parameters
+  df_xq_w_Lparms <- df_sample_fn %>% 
+    select(xq) %>% 
+    mutate(y_distL = dnorm(xq, mean = ml_params_fn[1], sd = ml_params_fn[2]))
+  
+  
+  plot_dist <- ggplot() +
+    # plot sample distribution
+    geom_line(data = df_sample_fn, aes(x = xq, y = xp, color = 'actual parameters')) +  # 'gray'
+    # plot fit based on likelihood parameters 
+    geom_line(data = df_xq_w_Lparms, aes(x = xq, y = y_distL, color = 'likelihood parameters'), size = 1) +  # 'steelblue'
+    # add rug plot for sample data
+    geom_rug(data = df_fn2, aes(x = xs)) + 
+    # add vertical line segment and point where xs intersects likelihood distribution
+    geom_point(data = df_fn2, aes(x = xs, y = fml_xs), color = 'red') + 
+    geom_segment(data = df_fn2, aes(x = xs, y = 0, xend = xs, yend = fml_xs, color = 'actual parameters'), linetype = 2) + 
+    # titles and stuff
+    ggtitle("Plot of Sample Distribution with Likelihood Assumptions", 
+            subtitle = paste("Sum of Likelihood values = ", L_sum)) +
+    ylab('Distribution') + 
+    xlab('Sample x') + 
+    theme(legend.position = "top") + 
+    scale_colour_manual(name="Distribution",
+                        values=c('actual parameters' = "gray", 
+                                 'likelihood parameters' = "steelblue")) 
+    
+  ?theme
+  return(plot_dist)
+  
+}
+
+?geom_segment
+
+plot_obj2 <- plot_dist_lnL_fn(d_sample_dist, d_plot_wlnL, mle_params)
+plot(plot_obj2)
 
 
-#-----------------------------------
-#  Example 2
+# library(plotly)
+plotly_obj2 <- ggplotly(plot_obj2 + 
+                          ggtitle(paste("Plot of Sample Distribution with 
+                                        Likelihood Assumptions <br> Sum of 
+                                        Likelihood values = ", L_sum)), 
+                        tooltip = "y")
+
+
+library(gridExtra)
+
+gridExtra::grid.arrange(
+  plot_obj1, 
+  plot_obj2, 
+  nrow = 1
+)
+
+
+library(cowplot)
+
+plot_grid(plot_obj1, plot_obj2)
+
+
+
+#  Example 2 ------------------------------------------------------------------
 #  known mu
 #  find standard deviation by MLE
-#-----------------------------------
-
-x = rnorm(1000, mean=100, sd=10)
-
-logL.fn2 = function(z, sigma){ln.fz = dnorm(z, mean = 100, sd = sigma, log = TRUE)}
-
-sig = 50:200/10
-
-lnL.sigma = sapply(x, logL.fn2, sig)
-lnL.sum = apply(lnL.sigma, 1, sum)
-
-plot(sig, lnL.sum, type='l', 
-main="Log Likelihood Estimate of Variance", 
-xlab="Estimate of StdDev", ylab="Log Likelihood")
-segments(x0=10, y0=min(lnL.sum), x1=10, y1=max(lnL.sum), col='red')
-
-sd.max = sig[lnL.sum==max(lnL.sum)]
-segments(x0=sd.max, y0=min(lnL.sum), x1=sd.max, y1=max(lnL.sum), col='blue')
-
-#-----------------------------------
+# 
+# 
+# x = rnorm(1000, mean=100, sd=10)
+# 
+# logL.fn2 = function(z, sigma){ln.fz = dnorm(z, mean = 100, sd = sigma, log = TRUE)}
+# 
+# sig = 50:200/10
+# 
+# lnL.sigma = sapply(x, logL.fn2, sig)
+# lnL.sum = apply(lnL.sigma, 1, sum)
+# 
+# plot(sig, lnL.sum, type='l', 
+# main="Log Likelihood Estimate of Variance", 
+# xlab="Estimate of StdDev", ylab="Log Likelihood")
+# segments(x0=10, y0=min(lnL.sum), x1=10, y1=max(lnL.sum), col='red')
+# 
+# sd.max = sig[lnL.sum==max(lnL.sum)]
+# segments(x0=sd.max, y0=min(lnL.sum), x1=sd.max, y1=max(lnL.sum), col='blue')
 
 
-#-----------------------------------
-#  Example 3
-#  known sigma
-#  find mu by MLE
-#  Likelihood allowing for right-censoring
-#-----------------------------------
-
-x = sort(rnorm(200, mean=100, sd=10))
-c = c(rep(1, 175), rep(0, 25)) #censoring indicator "1"=complete "0"=censored
-
-mu = seq(50, 150, by=2)
-
-logL.mu.complete = function(z, u)
-{ln.fz = dnorm(z, mean = u, sd = 10, log = TRUE)}
-
-logL.mu.rcensored = function(z, u)
-{ln.fz = pnorm(z, mean = u, sd = 10, lower.tail = FALSE, log.p = TRUE)}
-
-lnL.mu.comp <- t(sapply(x[c==1], logL.mu.complete, mu))
-lnL.mu.rcens <- t(sapply(x[c==0], logL.mu.rcensored, mu))
-
-lnL.mu.all = rbind(lnL.mu.comp, lnL.mu.rcens)
-
-lnL.mu.sum = apply(lnL.mu.all, 2, sum)
-
-plot(mu, lnL.mu.sum, type='l', 
-main="Log Likelihood Estimate of Mean with Right-censoring", 
-xlab="Estimate of Mean", ylab="Log Likelihood")
-segments(x0=100, y0=min(lnL.mu.sum), x1=100, y1=max(lnL.mu.sum), col='red')
-
-#calculate mean for only 'complete' observations
-xm1 = mean(x[c==1])
-
-#calculate mean for all observations, but treating 'right censored' 
-#as if they failed at the same time (termination time of test)
-x2 = c( x[c==1], (rep(x[176], length(x[c==0]))) )
-xm2 = mean(x2)
-
-segments(x0=xm1, y0=min(lnL.mu.sum), x1=xm1, y1=max(lnL.mu.sum), col='blue')
-
-mu.max = mu[lnL.mu.sum==max(lnL.mu.sum)]
-#-----------------------------------
-
-
-#-----------------------------------
-#  Example 4
-#  known mean
-#  find sigma by MLE
-#  Likelihood allowing for right-censoring
-#-----------------------------------
-
-x = sort(rnorm(200, mean=100, sd=10))
-c = c(rep(1, 175), rep(0, 25)) #censoring indicator "1"=complete "0"=censored
-
-sig = 1:200/10
-
-logL.sigma.complete = function(z, sigma)
-{ln.fz = dnorm(z, mean = 100, sd = sigma, log = TRUE)}
-
-logL.sigma.rcensored = function(z, sigma)
-{ln.fz = pnorm(z, mean = 100, sd = sigma, lower.tail = FALSE, log.p = TRUE)}
-
-lnL.sigma.comp <- t(sapply(x[c==1], logL.sigma.complete, sig))
-lnL.sigma.rcens <- t(sapply(x[c==0], logL.sigma.rcensored, sig))
-
-lnL.sigma.all = rbind(lnL.sigma.comp, lnL.sigma.rcens)
-
-lnL.sigma.sum = apply(lnL.sigma.all, 2, sum)
-
-plot(sig[50:150], lnL.sigma.sum[50:150], type='l', 
-main="Log Likelihood Estimate of StdDev with Right-censoring", 
-xlab="Estimate of StdDev", ylab="Log Likelihood")
-segments(x0=10, y0=min(lnL.sigma.sum), x1=10, y1=max(lnL.sigma.sum), col='red')
-x9=sig[lnL.sigma.sum == max(lnL.sigma.sum)]
-segments(x0=x9, y0=min(lnL.sigma.sum), x1=x9, y1=max(lnL.sigma.sum), col='blue')
-
-
-#calculate stddev for only 'complete' observations
-xsd1 = sd(x[c==1])
-
-#calculate stddev for all observations, but treating 'right censored' 
-#as if they failed at the same time (termination time of test)
-xs2 = c( x[c==1], (rep(x[176], length(x[c==0]))) )
-xsd2 = sd(xs2)
-
-segments(x0=xm1, y0=min(lnL.sum), x1=xm1, y1=max(lnL.sum), col='blue')
-
-sd.max = sig[lnL.sigma.sum==max(lnL.sigma.sum)]
-#-----------------------------------
-
-
-#-----------------------------------
-#  Example 5 
-#  Data from lognormally distributed population
-#  known scale
-#  find mu by MLE - but mistakenly assume normal dist
-#-----------------------------------
-
-x = rlnorm(n=200, meanlog = 0, sdlog = 1)
-hist(x)
-
-logL.fn1 = function(z, u){ln.fz = dnorm(z, mean = u, sd = 1, log = TRUE)}
-
-mu = seq(-50, 50, by=2)
-
-lnL.mu = sapply(x, logL.fn1, mu)
-lnL.sum = apply(lnL.mu, 1, sum)
-
-mle.mu = cbind(mu, lnL.sum)
-plot(mu, lnL.sum, type='l', 
-main="Log Likelihood Estimate of Mean", 
-xlab="Estimate of Mean", ylab="Log Likelihood")
-segments(x0=0, y0=min(lnL.sum), x1=0, y1=max(lnL.sum), col='red')
-x9 = mu[lnL.sum == max(lnL.sum)]
-segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
-
-mu.max = mu[lnL.sum==max(lnL.sum)]
-#-----------------------------------
-
-
-#-----------------------------------
-#  Example 6 
-#  Data from lognormally distributed population
-#  known scale
-#  find mu by MLE - but correctly assume lognormally dist
-#-----------------------------------
-
-x = rlnorm(n=200, meanlog = 0, sdlog = 1)
-hist(x)
-
-logL.fn1 = function(z, u){ln.fz = dlnorm(z, mean = u, sd = 1, log = TRUE)}
-
-mu = seq(-50, 50, by=2)
-
-lnL.mu = sapply(x, logL.fn1, mu)
-lnL.sum = apply(lnL.mu, 1, sum)
-
-plot(mu, lnL.sum, type='l', 
-main="Log Likelihood Estimate of Mean", 
-xlab="Estimate of Mean", ylab="Log Likelihood")
-segments(x0=0, y0=min(lnL.sum), x1=0, y1=max(lnL.sum), col='red')
-x9 = mu[lnL.sum == max(lnL.sum)]
-segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
-
-mu.max = mu[lnL.sum==max(lnL.sum)]
-#-----------------------------------
 
 
  
 
-#-----------------------------------
-#  Example 7 
+#  Example 7 ------------------------------------------------------------------
 #  Data from normally distributed population
 #  unknown mean and standard deviation
 #  find mu and stddev by MLE using matrix of results
-#-----------------------------------
 
-x = rnorm(n=375, mean = 100, sd = 10)
-#hist(x)
-
-logL.fn1 = function(z, u, s){ln.fz = dnorm(z, mean = u, sd = s, log = TRUE)}
-
-mu.vec = seq(70, 130, by=1)
-sig.vec = seq(5, 15, by=1)
-
-lnL.df = as.data.frame(array(data = NA, dim = c(length(mu.vec)*length(sig.vec),6)))
-colnames(lnL.df) = c("index","j","i","mu","sig","lnL")
-
-for (j in 1:length(mu.vec))
-{
- for (i in 1:length(sig.vec))
- {
- index = i + (j-1)*length(sig.vec)
- lnL.sum = sum(sapply(x, logL.fn1, mu.vec[j], sig.vec[i]))
- lnL.df[index,1] = index
- lnL.df[index,2] = j
- lnL.df[index,3] = i
- lnL.df[index,4] = mu.vec[j]
- lnL.df[index,5] = sig.vec[i]
- lnL.df[index,6] = lnL.sum
- }
-}
-
-lnL.min.ind = lnL.df[lnL.df$lnL==min(lnL.df$lnL), 1]
-lnL.min.mu = lnL.df[lnL.df$lnL==min(lnL.df$lnL), 4]
-lnL.min.sig = lnL.df[lnL.df$lnL==min(lnL.df$lnL), 5]
-lnL.min.val = lnL.df[lnL.df$lnL==min(lnL.df$lnL), 6]
-
-lnL.max.ind = lnL.df[lnL.df$lnL==max(lnL.df$lnL), 1]
-lnL.max.mu = lnL.df[lnL.df$lnL==max(lnL.df$lnL), 4]
-lnL.max.sig = lnL.df[lnL.df$lnL==max(lnL.df$lnL), 5]
-lnL.max.val = lnL.df[lnL.df$lnL==max(lnL.df$lnL), 6]
-
-library(scatterplot3d)
-help(scatterplot3d)
-
-
-par(mfrow=c(2,2))
-
-s3d = scatterplot3d(x=lnL.df$mu, y=lnL.df$sig, z=lnL.df$lnL, 
- main="Loglikelihood of Mu and Sigma", xlab="mu", ylab="sigma", zlab="Log Likelihood")
-s3d$points3d(lnL.max.mu, lnL.max.sig, lnL.max.value, col="red", type="h", pch=16)
-
-plot(lnL.df$mu, lnL.df$lnL, type='p', main="Log Likelihood Estimate of Mean", 
- xlab="mu", ylab="Log Likelihood")
-segments(x0=lnL.max.mu, y0=min(lnL.df$lnL), x1=lnL.max.mu, y1=max(lnL.df$lnL), col='red')
-
-plot(lnL.df$sig, lnL.df$lnL, type='p', main="Log Likelihood Estimate of Sigma", 
- xlab="sigma", ylab="Log Likelihood")
-segments(x0=lnL.max.sig, y0=min(lnL.df$lnL), x1=lnL.max.sig, y1=max(lnL.df$lnL), col='red')
-
-#-----------------------------------
+# x = rnorm(n=375, mean = 100, sd = 10)
+# #hist(x)
+# 
+# logL.fn1 = function(z, u, s){ln.fz = dnorm(z, mean = u, sd = s, log = TRUE)}
+# 
+# mu.vec = seq(70, 130, by=1)
+# sig.vec = seq(5, 15, by=1)
+# 
+# lnL.df = as.data.frame(array(data = NA, dim = c(length(mu.vec)*length(sig.vec),6)))
+# colnames(lnL.df) = c("index","j","i","mu","sig","lnL")
+# 
+# for (j in 1:length(mu.vec))
+# {
+#  for (i in 1:length(sig.vec))
+#  {
+#  index = i + (j-1)*length(sig.vec)
+#  lnL.sum = sum(sapply(x, logL.fn1, mu.vec[j], sig.vec[i]))
+#  lnL.df[index,1] = index
+#  lnL.df[index,2] = j
+#  lnL.df[index,3] = i
+#  lnL.df[index,4] = mu.vec[j]
+#  lnL.df[index,5] = sig.vec[i]
+#  lnL.df[index,6] = lnL.sum
+#  }
+# }
+# 
+# lnL.min.ind = lnL.df[lnL.df$lnL==min(lnL.df$lnL), 1]
+# lnL.min.mu = lnL.df[lnL.df$lnL==min(lnL.df$lnL), 4]
+# lnL.min.sig = lnL.df[lnL.df$lnL==min(lnL.df$lnL), 5]
+# lnL.min.val = lnL.df[lnL.df$lnL==min(lnL.df$lnL), 6]
+# 
+# lnL.max.ind = lnL.df[lnL.df$lnL==max(lnL.df$lnL), 1]
+# lnL.max.mu = lnL.df[lnL.df$lnL==max(lnL.df$lnL), 4]
+# lnL.max.sig = lnL.df[lnL.df$lnL==max(lnL.df$lnL), 5]
+# lnL.max.val = lnL.df[lnL.df$lnL==max(lnL.df$lnL), 6]
+# 
+# library(scatterplot3d)
+# help(scatterplot3d)
+# 
+# 
+# par(mfrow=c(2,2))
+# 
+# s3d = scatterplot3d(x=lnL.df$mu, y=lnL.df$sig, z=lnL.df$lnL, 
+#  main="Loglikelihood of Mu and Sigma", xlab="mu", ylab="sigma", zlab="Log Likelihood")
+# s3d$points3d(lnL.max.mu, lnL.max.sig, lnL.max.value, col="red", type="h", pch=16)
+# 
+# plot(lnL.df$mu, lnL.df$lnL, type='p', main="Log Likelihood Estimate of Mean", 
+#  xlab="mu", ylab="Log Likelihood")
+# segments(x0=lnL.max.mu, y0=min(lnL.df$lnL), x1=lnL.max.mu, y1=max(lnL.df$lnL), col='red')
+# 
+# plot(lnL.df$sig, lnL.df$lnL, type='p', main="Log Likelihood Estimate of Sigma", 
+#  xlab="sigma", ylab="Log Likelihood")
+# segments(x0=lnL.max.sig, y0=min(lnL.df$lnL), x1=lnL.max.sig, y1=max(lnL.df$lnL), col='red')
 
 
 
 
-#-----------------------------------
-#  Example 8 
-#  Data from exponentially distributed population
-#  known lambda (aka rate)
-#  find lambda by MLE 
-#-----------------------------------
-
-x = rexp(n=1000, rate=15)
-
-#par(mfrow=c(2,1))
-#hist(x.pop)
-#hist(x.sample)
-
-logL.fn1 = function(z, scale){ln.fz = dexp(z, scale, log = TRUE)}
-
-lambda = seq(1, 30, by=0.1)
-
-lnL.lambda = sapply(x.sample, logL.fn1, lambda)
-lnL.sum = apply(lnL.lambda, 1, sum)
-
-lambda.max = lambda[lnL.sum==max(lnL.sum)]
-
-
-plot(lambda, lnL.sum, type='l', 
-main="Log Likelihood Estimate of lambda (rate)", 
-xlab="Estimate of lambda", ylab="Log Likelihood")
-segments(x0=15, y0=min(lnL.sum), x1=15, y1=max(lnL.sum), col='red')
-x9 = lambda[lnL.sum == max(lnL.sum)]
-segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
-
-#-----------------------------------
-
-
-#-----------------------------------
-#  Example 9 
-#  Data from exponentially distributed population
-#  known lambda (aka rate=15)
-#  find scale of Weibull by MLE (should equal 1)
-#  with Weibull scale parameter equal to 1/lambda
-#-----------------------------------
-par(mfrow=c(1,1))
-x = rexp(n=1000, rate=15)
-hist(x)
-
-logL.fn1 = function(z, shape){ln.fz = dweibull(z, shape, scale = 1/15, log = TRUE)}
-
-wshape = seq(0.1, 2, by=0.1)
-
-lnL.shape = sapply(x, logL.fn1, wshape)
-lnL.sum = apply(lnL.shape, 1, sum)
-
-
-plot(wshape, lnL.sum, type='l', 
-main="Log Likelihood Estimate of Shape", 
-xlab="Estimate of Shape", ylab="Log Likelihood")
-segments(x0=1, y0=min(lnL.sum), x1=1, y1=max(lnL.sum), col='red')
-x9 = wshape[lnL.sum == max(lnL.sum)]
-segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
-
-wshape.max = wshape[lnL.sum==max(lnL.sum)]
-#-----------------------------------
-
-
-#-----------------------------------
-#  Example 10 
-#  Data from exponentially distributed population
-#  known lambda (aka rate)
-#  set Shape of Weibull to equal 1
-#  find Weibull Scale parameter (should be equal to exp lambda)
-#-----------------------------------
-
-#y = rweibull(n=1000, shape=1, scale=1/15)
-x = rexp(n=1000, rate=15)
-#par(mfrow=c(2,1))
-hist(x)
-#hist(y)
-
-logL.fn1 = function(z, scale){ln.fz = dweibull(z, shape=1, scale, log = TRUE)}
-
-wscale = seq(0.01, 1, by=0.001)
-
-lnL.scale = sapply(x, logL.fn1, wscale)
-lnL.sum = apply(lnL.scale, 1, sum)
-
-plot(wscale, lnL.sum, type='l', 
-main="Log Likelihood Estimate of Scale", 
-xlab="Estimate of Scale", ylab="Log Likelihood")
-segments(x0=1/15, y0=min(lnL.sum), x1=1/15, y1=max(lnL.sum), col='red')
-x9 = wscale[lnL.sum == max(lnL.sum)]
-segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
-
-wscale.max = wscale[lnL.sum==max(lnL.sum)]
-#-----------------------------------
-
- 
-
-#-----------------------------------
-#  Example 11 
-#  Data from exponentially distributed population
-#  known lambda (aka rate)
-#  Take random sample and estimate lambda by MLE 
-#  Demonstrate that the MLE is asymptotically normal
-#-----------------------------------
-
-#Define a "population" from an Exponential distribution
-x.pop = rexp(n=10000, rate=15)
-
-l.max.vec = array(data = NA, dim = 1000, dimnames = NULL)
-
-for (i in 1:1000)
-{
-x.sample = sample(x.pop, size=100, replace=TRUE)
-
-logL.fn1 = function(z, scale){ln.fz = dexp(z, scale, log = TRUE)}
-
-lambda = seq(1, 30, by=0.1)
-
-lnL.lambda = sapply(x.sample, logL.fn1, lambda)
-lnL.sum = apply(lnL.lambda, 1, sum)
-
-lambda.max = lambda[lnL.sum==max(lnL.sum)]
-l.max.vec[i] = lambda.max
-}
-
-l.max.ordered = sort(l.max.vec, decreasing=FALSE)
-lcl.lambda = l.max.ordered[25]
-ucl.lambda = l.max.ordered[975]
-median.lambda = l.max.ordered[500]
-min.lambda = min(l.max.ordered)
-max.lambda = max(l.max.ordered)
-
-hist(l.max.vec)
-segments(x0=median.lambda, y0=0, x1=median.lambda, y1=300, col="blue")
-segments(x0=lcl.lambda, y0=0, x1=lcl.lambda, y1=300, col="red")
-segments(x0=ucl.lambda, y0=0, x1=ucl.lambda, y1=300, col="red")
-
-#-----------------------------------
 
 
  
