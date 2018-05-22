@@ -2,8 +2,7 @@
 title: "Maximum Likelihood Demos"
 output: 
   flexdashboard::flex_dashboard:
-    orientation: rows
-    vertical_layout: fill
+    orientation: columns
 runtime: shiny
 ---
 
@@ -41,12 +40,12 @@ plot_lnL_fn <- function(df_fn, parms_fn){
   lnL_mu_min <- df_fn[df_fn$lnL_sum == min(df_fn$lnL_sum), 'lnL_sum']
 
   # TEST ONLY
-  cat(paste("parms_fn",parms_fn))
-  cat(paste("muL_max",muL_max))
-  cat(paste("lnL_mu_max",lnL_mu_max))
-  cat(paste("ln_mu_min",lnL_mu_min))
-  cat(paste("df_fn$mu_L",df_fn$mu_L))
-  cat(paste("df_fn$lnL_sum",df_fn$lnL_sum))
+  # cat(paste("parms_fn",parms_fn))
+  # cat(paste("muL_max",muL_max))
+  # cat(paste("lnL_mu_max",lnL_mu_max))
+  # cat(paste("ln_mu_min",lnL_mu_min))
+  # cat(paste("df_fn$mu_L",df_fn$mu_L))
+  # cat(paste("df_fn$lnL_sum",df_fn$lnL_sum))
   
   
   plot_mu <- ggplot(df_fn, aes(x = mu_L, y = lnL_sum)) +
@@ -60,14 +59,14 @@ plot_lnL_fn <- function(df_fn, parms_fn){
     xlab('Value of mu_L')
   
   plot_mu <- plot_mu +
-        geom_point(x = parms_fn[1], y = parms_fn[2], shape = 3)
+        geom_point(x = parms_fn[1], y = parms_fn[2], shape = 3, size = 4)
   
   return(plot_mu)
   
 }
 
 
-plot_dist_lnL_fn <- function(df_sample_fn, df_fn2, ml_params_fn){
+plot_dist_lnL_fn <- function(xs_fn, df_sample_fn, df_fn2, ml_params_fn){
   
   # TEST ONLY
   # df_sample_fn <- d_sample_dist
@@ -92,10 +91,10 @@ plot_dist_lnL_fn <- function(df_sample_fn, df_fn2, ml_params_fn){
     # plot fit based on likelihood parameters 
     geom_line(data = df_xq_w_Lparms, aes(x = xq, y = y_distL, color = 'likelihood parameters'), size = 1) +  # 'steelblue'
     # add rug plot for sample data
-    geom_rug(data = df_fn2, aes(x = xs)) + 
+    geom_rug(data = df_fn2, aes(x = xs_fn)) + 
     # add vertical line segment and point where xs intersects likelihood distribution
-    geom_point(data = df_fn2, aes(x = xs, y = fml_xs), color = 'red') + 
-    geom_segment(data = df_fn2, aes(x = xs, y = 0, xend = xs, yend = fml_xs, color = 'actual parameters'), linetype = 2) + 
+    geom_point(data = df_fn2, aes(x = xs_fn, y = fml_xs), color = 'red') + 
+    geom_segment(data = df_fn2, aes(x = xs_fn, y = 0, xend = xs_fn, yend = fml_xs, color = 'individual values'), linetype = 2) + 
     # titles and stuff
     ggtitle("Plot of Sample Distribution with Likelihood Assumptions", 
             subtitle = paste("Sum of Likelihood values = ", L_sum)) +
@@ -103,8 +102,9 @@ plot_dist_lnL_fn <- function(df_sample_fn, df_fn2, ml_params_fn){
     xlab('Sample x') + 
     theme(legend.position = "top") + 
     scale_colour_manual(name="Distribution",
-                        values=c('actual parameters' = "gray", 
-                                 'likelihood parameters' = "steelblue")) 
+                        values=c('actual parameters' = "darkgreen", 
+                                 'likelihood parameters' = "steelblue",
+                                 'individual values' = 'gray')) 
 
   return(list(plot_dist, L_sum))
   
@@ -115,10 +115,19 @@ plot_dist_lnL_fn <- function(df_sample_fn, df_fn2, ml_params_fn){
 
 
 ```{r, the actual work}
+
 mu_sample <- 100
 sd_sample <- 10
 
-set.seed(438); xs = rnorm(77, mean = mu_sample, sd = sd_sample)
+reactive_xs <- reactive({
+  
+  set.seed(input$randseed); xs_out = rnorm(77, mean = mu_sample, sd = sd_sample)
+  return(xs_out)
+  
+})
+
+
+# set.seed(438); xs = rnorm(77, mean = mu_sample, sd = sd_sample)
 # for set.seed used "create_sample.R" script
 # mean(xs); sd(xs)
 
@@ -127,24 +136,34 @@ set.seed(438); xs = rnorm(77, mean = mu_sample, sd = sd_sample)
 
 ```{r, likelihood}
 
-mu_L <- seq(50, 150, by = 2)
-sd_L <- sd_sample
+reactive_L <- reactive({
+  
+  mu_L <- seq(50, 150, by = 2)
+  sd_L <- sd_sample
+  xs <- reactive_xs()
+  
+  df_L <- as.data.frame(expand.grid(mu_sample, sd_sample, mu_L, sd_L, xs)) %>% 
+    rename(mu_sample = Var1, sd_sample = Var2, mu_L = Var3, sd_L = Var4, xs = Var5) %>% 
+    arrange(xs, mu_L, mu_sample, sd_sample, xs) %>% 
+    # calculate loglikelihood for each observation xs in each mu_L
+    mutate(lnL_mu_L = logL_norm_fn(xs, mu_L, 10))
+  
+  
+  # loglikelihood for each mu_L
+  df_L_sum <- df_L %>% 
+    group_by(mu_sample, sd_sample, mu_L, sd_L) %>% 
+    # puts sample data and logL data into nested df
+    nest() %>% 
+    group_by(mu_sample, sd_sample, mu_L, sd_L) %>% 
+    # sum of all loglikelihood values within each mu_L
+    mutate(lnL_sum = map(data, ~ sum(.x$lnL_mu_L)))
+  
+  return(df_L_sum)
+  
+})
 
-df_L <- as.data.frame(expand.grid(mu_sample, sd_sample, mu_L, sd_L, xs)) %>% 
-  rename(mu_sample = Var1, sd_sample = Var2, mu_L = Var3, sd_L = Var4, xs = Var5) %>% 
-  arrange(xs, mu_L, mu_sample, sd_sample, xs) %>% 
-  # calculate loglikelihood for each observation xs in each mu_L
-  mutate(lnL_mu_L = logL_norm_fn(xs, mu_L, 10))
 
 
-# loglikelihood for each mu_L
-df_L_sum <- df_L %>% 
-  group_by(mu_sample, sd_sample, mu_L, sd_L) %>% 
-  # puts sample data and logL data into nested df
-  nest() %>% 
-  group_by(mu_sample, sd_sample, mu_L, sd_L) %>% 
-  # sum of all loglikelihood values within each mu_L
-  mutate(lnL_sum = map(data, ~ sum(.x$lnL_mu_L)))
 
 ```
 
@@ -152,18 +171,40 @@ df_L_sum <- df_L %>%
 Column {.sidebar}
 -----------------------------------------------------------------------
 
-Select estimated mean.
 
 ```{r}
-sliderInput("adjust_mu_L", label = "Estimated mean:",
+sliderInput("adjust_mu_L", label = "Select Estimated Mean:",
             min = 50, max = 150, value = 88, step = 2)
 ```
 
 
+```{r}
+sliderInput("randseed", label = "Select Seed:",
+            min = 1, max = 1000, value = 438, step = 1)
+```
 
 
-Row
+
+Column
 -----------------------------------------------------------------------
+
+### Likelihood Value
+
+```{r, monitor likelihood value}
+
+renderValueBox({
+
+  df_L_sum_tmp <- reactive_L()
+  
+  L_val <- unlist(df_L_sum_tmp[df_L_sum_tmp$mu_L == input$adjust_mu_L,]$lnL_sum)
+  
+  valueBox(round(L_val, 2), icon = "fa-tag")
+
+})
+
+```
+
+
 
 ### Histogram of Sample Data
 
@@ -171,31 +212,35 @@ Row
 
 renderPlot({
   
-  title_hist <- paste('Histogram of Sample data\n mean = ', 
-                      round(mean(xs),1), 'stdev = ', round(sd(xs),1))
+  xs2 <- reactive_xs()
   
-  hist(xs, main = title_hist, xlab = 'x', col = 'steelblue')
-  rug(xs, col = 'red')
-  grid()
+  title_hist <- paste('Histogram of Sample data\n mean = ', 
+                      round(mean(xs2),1), 'stdev = ', round(sd(xs2),1))
+
+  plothist <- ggplot(data.frame(xs2), aes(x = xs2)) + 
+    geom_histogram(color = 'gray', fill = 'steelblue', bins = 15) + 
+    geom_rug(color = 'red') + 
+    ggtitle(title_hist)
+  
+  plothist
   
 })
 
 ```
 
 
-Row
------------------------------------------------------------------------
-
 ### Plot loglikelihood for each mu_L
 
 ```{r}
 renderPlot({
   
-  L4plot <- unlist(df_L_sum[df_L_sum$mu_L == input$adjust_mu_L, 'lnL_sum'])
+  df_L_sum_tmp <- reactive_L()
+  
+  L4plot <- unlist(df_L_sum_tmp[df_L_sum_tmp$mu_L == input$adjust_mu_L, 'lnL_sum'])
 
   plot_parms1 <- c(input$adjust_mu_L, L4plot)
   
-  plot_obj1 <- plot_lnL_fn(df_L_sum, plot_parms1)
+  plot_obj1 <- plot_lnL_fn(df_L_sum_tmp, plot_parms1)
 
   plot(plot_obj1)
   
@@ -203,17 +248,11 @@ renderPlot({
 
 ```
 
+
 ```{r, prepare density for likelihood estimate, echo = FALSE}
 
-xmin1 <- mu_sample - 4*sd_sample
-# xmin2 <- 100 - 4*sd_sample
-# xmin <- min(xmin1, xmin2)
-xmin <- xmin1
-
-xmax1 = mu_sample + 4*sd_sample
-# xmax2 = 100 + 4*sd_sample
-# xmax <- max(xmax1, xmax2)
-xmax <- xmax1
+xmin <- mu_sample - 4*sd_sample
+xmax = mu_sample + 4*sd_sample
 
 
 xq <- seq(xmin, xmax, by = 0.1)
@@ -224,53 +263,28 @@ d_sample_dist <- data.frame(cbind(xq, xp))
 ```
 
 
-### Plot Density based on Likelihood parameters
 
-```{r, plot density for likelihood estimate}
-
-renderPlot({
-  
-  mle_params <- c(input$adjust_mu_L, 10)  # mean, stdev
-
-  fml_xs <- dnorm(x = xs, mean = mle_params[1], sd = mle_params[2])
-  fml_L <- dnorm(x = xs, mean = mle_params[1], sd = mle_params[2], log = TRUE)
-  
-  d_plot_wlnL <- data.frame(cbind(xs, fml_xs, fml_L))
-  
-  plot_obj2 <- plot_dist_lnL_fn(d_sample_dist, d_plot_wlnL, mle_params)
-  L_sum <- plot_obj2[[2]]
-  plot(plot_obj2[[1]])
-  
-})
-
-
-```
-
-
-Row
------------------------------------------------------------------------
-
-### Plotly distribution
+### Distribution with likelihood parameters
 
 ```{r}
 
-#library(plotly)
-
 renderPlotly({
+  
+  xs3 <- reactive_xs()
+  # xs3 <- xs
   
   # duplicated from ggplot code
   mle_params <- c(input$adjust_mu_L, 10)  # mean, stdev
+  # mle_params <- c(88, 10)
 
-  fml_xs <- dnorm(x = xs, mean = mle_params[1], sd = mle_params[2])
-  fml_L <- dnorm(x = xs, mean = mle_params[1], sd = mle_params[2], log = TRUE)
+  fml_xs <- dnorm(x = xs3, mean = mle_params[1], sd = mle_params[2])
+  fml_L <- dnorm(x = xs3, mean = mle_params[1], sd = mle_params[2], log = TRUE)
   
-  d_plot_wlnL <- data.frame(cbind(xs, fml_xs, fml_L))
+  d_plot_wlnL <- data.frame(cbind(xs3, fml_xs, fml_L))
   
-  plot_obj2 <- plot_dist_lnL_fn(d_sample_dist, d_plot_wlnL, mle_params)
+  plot_obj2 <- plot_dist_lnL_fn(xs3, d_sample_dist, d_plot_wlnL, mle_params)
   L_sum <- plot_obj2[[2]]
-  #plot(plot_obj2[[1]])
-  
-  # new in this section
+
   plotly_obj2 <- ggplotly(plot_obj2[[1]] +
                           ggtitle("Plot of Sample Distribution with Likelihood Assumptions"), 
                           tooltip = "y")
@@ -280,3 +294,17 @@ renderPlotly({
 ```
 
 
+Column
+------------------------------------------------------------------
+
+### Data
+
+```{r, show table}
+
+DT::renderDataTable({
+  
+  showdf <- reactive_L() %>% select(-data)
+  
+}, filter = 'top')
+
+```
