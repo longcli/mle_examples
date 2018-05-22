@@ -288,7 +288,7 @@ x = rexp(n=1000, rate=15)
 
 logL.fn1 = function(z, scale){ln.fz = dexp(z, scale, log = TRUE)}
 
-lambda = seq(1, 30, by=0.1)
+lambda = seq(1, 30, by=0.01)
 
 lnL.lambda = sapply(x.sample, logL.fn1, lambda)
 lnL.sum = apply(lnL.lambda, 1, sum)
