@@ -1,8 +1,8 @@
 ---
-title: "Maximum Likelihood Demos"
+title: "Maximum Likelihood Demo - Estimate Sample Mean"
 output: 
   flexdashboard::flex_dashboard:
-    orientation: columns
+  orientation: columns
 runtime: shiny
 ---
 
@@ -59,7 +59,7 @@ plot_lnL_fn <- function(df_fn, parms_fn){
     xlab('Value of mu_L')
   
   plot_mu <- plot_mu +
-        geom_point(x = parms_fn[1], y = parms_fn[2], shape = 3, size = 4)
+        geom_point(x = parms_fn[1], y = parms_fn[2], shape = 3, size = 8, color = 'red')
   
   return(plot_mu)
   
@@ -114,7 +114,7 @@ plot_dist_lnL_fn <- function(xs_fn, df_sample_fn, df_fn2, ml_params_fn){
 ```
 
 
-```{r, the actual work}
+```{r, create sample data}
 
 mu_sample <- 100
 sd_sample <- 10
@@ -168,9 +168,12 @@ reactive_L <- reactive({
 ```
 
 
-Column {.sidebar}
------------------------------------------------------------------------
+CHARTS
+===============================================================================
 
+
+Column {.sidebar}
+-------------------------------------------------------------------------------
 
 ```{r}
 sliderInput("adjust_mu_L", label = "Select Estimated Mean:",
@@ -186,7 +189,7 @@ sliderInput("randseed", label = "Select Seed:",
 
 
 Column
------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 
 ### Likelihood Value
 
@@ -203,6 +206,7 @@ renderValueBox({
 })
 
 ```
+
 
 
 
@@ -227,6 +231,8 @@ renderPlot({
 })
 
 ```
+
+
 
 
 ### Plot loglikelihood for each mu_L
@@ -264,6 +270,7 @@ d_sample_dist <- data.frame(cbind(xq, xp))
 
 
 
+
 ### Distribution with likelihood parameters
 
 ```{r}
@@ -294,8 +301,8 @@ renderPlotly({
 ```
 
 
-Column
-------------------------------------------------------------------
+DATA
+===============================================================================
 
 ### Data
 
