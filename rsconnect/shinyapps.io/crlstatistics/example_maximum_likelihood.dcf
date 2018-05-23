@@ -1,0 +1,10 @@
+name: example_maximum_likelihood
+title:
+username:
+account: crlstatistics
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 347460
+bundleId: 1388965
+url: https://crlstatistics.shinyapps.io/example_maximum_likelihood/
+when: 1527078112.04531

@@ -191,7 +191,7 @@ sliderInput("randseed", label = "Select Seed:",
 Column
 -------------------------------------------------------------------------------
 
-### Likelihood Value
+### Log Likelihood Value
 
 ```{r, monitor likelihood value}
 
