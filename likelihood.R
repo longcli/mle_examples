@@ -1,19 +1,50 @@
 
 
- 
+# LOAD PACKAGES ###############################################################
 
-#-----------------------------------
-#  Example 1
-#  known standard deviation
+library(tidyverse)
+
+
+
+# EXAMPLE - CREATE LIKELIHOOD PROFILE #########################################
+
+actualmean <- 100
+actualsd <- 10
+
+testmean <- 190
+testsd <- 10
+
+x <- rnorm(10, mean = actualmean, sd = actualsd)
+fx <- dnorm(x, mean = testmean, sd = testsd)
+lnfx <- dnorm(x, mean = testmean, sd = testsd, log = TRUE)
+
+dat <- data.frame(cbind(x, fx, lnfx))
+
+(lnL_total <- sum(dat$lnfx))
+
+
+tmean <- c(10, 30, 70, 100, 130, 170, 190)
+lnLout <- c(-463.2397, -292.2898, -91.68665, -38.84111, -59.6546, -294.1916, -408.0759)
+
+testdat <- as.data.frame(cbind(tmean, lnLout))
+
+
+ggplot(data = testdat, aes(x = tmean, y = lnLout)) + 
+  geom_point() + 
+  geom_smooth(method = 'loess', color = 'red', se = FALSE)
+
+
+
+
+# Example 1 - known standard deviation ########################################
 #  find mu by MLE
-#-----------------------------------
+
 
 x = rnorm(77, mean=100, sd=10)
 
 hist(x)
 
-logL.fn1 = function(z, u)
-{ln.fz = dnorm(z, mean = u, sd = 10, log = TRUE)}
+logL.fn1 = function(z, u){dnorm(z, mean = u, sd = 10, log = TRUE)}
 
  #ln.fz = -log(sqrt(2*pi)) - log(sigma) - (0.5/(sigma^2))*(z - u)^2
 
@@ -28,18 +59,15 @@ xlab="Estimate of Mean", ylab="Log Likelihood")
 segments(x0=100, y0=min(lnL.sum), x1=100, y1=max(lnL.sum), col='red')
 
 mu.max = mu[lnL.sum==max(lnL.sum)]
-#-----------------------------------
 
 
-#-----------------------------------
-#  Example 2
-#  known mu
+
+# Example 2 - known mu ########################################################
 #  find standard deviation by MLE
-#-----------------------------------
 
 x = rnorm(1000, mean=100, sd=10)
 
-logL.fn2 = function(z, sigma){ln.fz = dnorm(z, mean = 100, sd = sigma, log = TRUE)}
+logL.fn2 = function(z, sigma){dnorm(z, mean = 100, sd = sigma, log = TRUE)}
 
 sig = 50:200/10
 
@@ -54,26 +82,21 @@ segments(x0=10, y0=min(lnL.sum), x1=10, y1=max(lnL.sum), col='red')
 sd.max = sig[lnL.sum==max(lnL.sum)]
 segments(x0=sd.max, y0=min(lnL.sum), x1=sd.max, y1=max(lnL.sum), col='blue')
 
-#-----------------------------------
 
 
-#-----------------------------------
-#  Example 3
-#  known sigma
+
+# Example 3 - known sigma - R censoring #######################################
 #  find mu by MLE
 #  Likelihood allowing for right-censoring
-#-----------------------------------
 
 x = sort(rnorm(200, mean=100, sd=10))
 c = c(rep(1, 175), rep(0, 25)) #censoring indicator "1"=complete "0"=censored
 
 mu = seq(50, 150, by=2)
 
-logL.mu.complete = function(z, u)
-{ln.fz = dnorm(z, mean = u, sd = 10, log = TRUE)}
+logL.mu.complete = function(z, u){dnorm(z, mean = u, sd = 10, log = TRUE)}
 
-logL.mu.rcensored = function(z, u)
-{ln.fz = pnorm(z, mean = u, sd = 10, lower.tail = FALSE, log.p = TRUE)}
+logL.mu.rcensored = function(z, u){pnorm(z, mean = u, sd = 10, lower.tail = FALSE, log.p = TRUE)}
 
 lnL.mu.comp <- t(sapply(x[c==1], logL.mu.complete, mu))
 lnL.mu.rcens <- t(sapply(x[c==0], logL.mu.rcensored, mu))
@@ -98,26 +121,21 @@ xm2 = mean(x2)
 segments(x0=xm1, y0=min(lnL.mu.sum), x1=xm1, y1=max(lnL.mu.sum), col='blue')
 
 mu.max = mu[lnL.mu.sum==max(lnL.mu.sum)]
-#-----------------------------------
 
 
-#-----------------------------------
-#  Example 4
-#  known mean
+
+# Example 4 - known mean - R censoring ########################################
 #  find sigma by MLE
 #  Likelihood allowing for right-censoring
-#-----------------------------------
 
 x = sort(rnorm(200, mean=100, sd=10))
 c = c(rep(1, 175), rep(0, 25)) #censoring indicator "1"=complete "0"=censored
 
 sig = 1:200/10
 
-logL.sigma.complete = function(z, sigma)
-{ln.fz = dnorm(z, mean = 100, sd = sigma, log = TRUE)}
+logL.sigma.complete = function(z, sigma){dnorm(z, mean = 100, sd = sigma, log = TRUE)}
 
-logL.sigma.rcensored = function(z, sigma)
-{ln.fz = pnorm(z, mean = 100, sd = sigma, lower.tail = FALSE, log.p = TRUE)}
+logL.sigma.rcensored = function(z, sigma){pnorm(z, mean = 100, sd = sigma, lower.tail = FALSE, log.p = TRUE)}
 
 lnL.sigma.comp <- t(sapply(x[c==1], logL.sigma.complete, sig))
 lnL.sigma.rcens <- t(sapply(x[c==0], logL.sigma.rcensored, sig))
@@ -145,20 +163,18 @@ xsd2 = sd(xs2)
 segments(x0=xm1, y0=min(lnL.sum), x1=xm1, y1=max(lnL.sum), col='blue')
 
 sd.max = sig[lnL.sigma.sum==max(lnL.sigma.sum)]
-#-----------------------------------
 
 
-#-----------------------------------
-#  Example 5 
+
+# Example 5 - known scale - lognorm ###########################################
 #  Data from lognormally distributed population
 #  known scale
 #  find mu by MLE - but mistakenly assume normal dist
-#-----------------------------------
 
 x = rlnorm(n=200, meanlog = 0, sdlog = 1)
 hist(x)
 
-logL.fn1 = function(z, u){ln.fz = dnorm(z, mean = u, sd = 1, log = TRUE)}
+logL.fn1 = function(z, u){dnorm(z, mean = u, sd = 1, log = TRUE)}
 
 mu = seq(-50, 50, by=2)
 
@@ -174,20 +190,18 @@ x9 = mu[lnL.sum == max(lnL.sum)]
 segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
 
 mu.max = mu[lnL.sum==max(lnL.sum)]
-#-----------------------------------
 
 
-#-----------------------------------
-#  Example 6 
+
+# Example 6 - known scale - lognorm 2 #########################################
 #  Data from lognormally distributed population
 #  known scale
 #  find mu by MLE - but correctly assume lognormally dist
-#-----------------------------------
 
 x = rlnorm(n=200, meanlog = 0, sdlog = 1)
 hist(x)
 
-logL.fn1 = function(z, u){ln.fz = dlnorm(z, mean = u, sd = 1, log = TRUE)}
+logL.fn1 = function(z, u){dlnorm(z, meanlog = u, sdlog = 1, log = TRUE)}
 
 mu = seq(-50, 50, by=2)
 
@@ -202,22 +216,19 @@ x9 = mu[lnL.sum == max(lnL.sum)]
 segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
 
 mu.max = mu[lnL.sum==max(lnL.sum)]
-#-----------------------------------
 
 
  
 
-#-----------------------------------
-#  Example 7 
+# Example 7 - find mean and stdev #############################################
 #  Data from normally distributed population
 #  unknown mean and standard deviation
 #  find mu and stddev by MLE using matrix of results
-#-----------------------------------
 
 x = rnorm(n=375, mean = 100, sd = 10)
 #hist(x)
 
-logL.fn1 = function(z, u, s){ln.fz = dnorm(z, mean = u, sd = s, log = TRUE)}
+logL.fn1 = function(z, u, s){dnorm(z, mean = u, sd = s, log = TRUE)}
 
 mu.vec = seq(70, 130, by=1)
 sig.vec = seq(5, 15, by=1)
@@ -268,17 +279,13 @@ plot(lnL.df$sig, lnL.df$lnL, type='p', main="Log Likelihood Estimate of Sigma",
  xlab="sigma", ylab="Log Likelihood")
 segments(x0=lnL.max.sig, y0=min(lnL.df$lnL), x1=lnL.max.sig, y1=max(lnL.df$lnL), col='red')
 
-#-----------------------------------
 
 
 
-
-#-----------------------------------
-#  Example 8 
+# Example 8 - find lambda - exponential #######################################
 #  Data from exponentially distributed population
 #  known lambda (aka rate)
 #  find lambda by MLE 
-#-----------------------------------
 
 x = rexp(n=1000, rate=15)
 
@@ -286,11 +293,11 @@ x = rexp(n=1000, rate=15)
 #hist(x.pop)
 #hist(x.sample)
 
-logL.fn1 = function(z, scale){ln.fz = dexp(z, scale, log = TRUE)}
+logL.fn1 = function(z, scale){dexp(z, scale, log = TRUE)}
 
 lambda = seq(1, 30, by=0.01)
 
-lnL.lambda = sapply(x.sample, logL.fn1, lambda)
+lnL.lambda = sapply(x, logL.fn1, lambda)
 lnL.sum = apply(lnL.lambda, 1, sum)
 
 lambda.max = lambda[lnL.sum==max(lnL.sum)]
@@ -303,21 +310,19 @@ segments(x0=15, y0=min(lnL.sum), x1=15, y1=max(lnL.sum), col='red')
 x9 = lambda[lnL.sum == max(lnL.sum)]
 segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
 
-#-----------------------------------
 
 
-#-----------------------------------
-#  Example 9 
+# Example 9 - exponential and weibull #########################################
 #  Data from exponentially distributed population
 #  known lambda (aka rate=15)
 #  find scale of Weibull by MLE (should equal 1)
 #  with Weibull scale parameter equal to 1/lambda
-#-----------------------------------
+
 par(mfrow=c(1,1))
 x = rexp(n=1000, rate=15)
 hist(x)
 
-logL.fn1 = function(z, shape){ln.fz = dweibull(z, shape, scale = 1/15, log = TRUE)}
+logL.fn1 = function(z, shape){dweibull(z, shape, scale = 1/15, log = TRUE)}
 
 wshape = seq(0.1, 2, by=0.1)
 
@@ -333,16 +338,14 @@ x9 = wshape[lnL.sum == max(lnL.sum)]
 segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
 
 wshape.max = wshape[lnL.sum==max(lnL.sum)]
-#-----------------------------------
 
 
-#-----------------------------------
-#  Example 10 
+
+# Example 10 - exponential and weibull 2 ######################################
 #  Data from exponentially distributed population
 #  known lambda (aka rate)
 #  set Shape of Weibull to equal 1
 #  find Weibull Scale parameter (should be equal to exp lambda)
-#-----------------------------------
 
 #y = rweibull(n=1000, shape=1, scale=1/15)
 x = rexp(n=1000, rate=15)
@@ -350,7 +353,7 @@ x = rexp(n=1000, rate=15)
 hist(x)
 #hist(y)
 
-logL.fn1 = function(z, scale){ln.fz = dweibull(z, shape=1, scale, log = TRUE)}
+logL.fn1 = function(z, scale){dweibull(z, shape=1, scale, log = TRUE)}
 
 wscale = seq(0.01, 1, by=0.001)
 
@@ -365,17 +368,15 @@ x9 = wscale[lnL.sum == max(lnL.sum)]
 segments(x0=x9, y0=min(lnL.sum), x1=x9, y1=max(lnL.sum), col='blue')
 
 wscale.max = wscale[lnL.sum==max(lnL.sum)]
-#-----------------------------------
 
- 
 
-#-----------------------------------
-#  Example 11 
+
+# Example 11 - MLE asymptotically normal ######################################
 #  Data from exponentially distributed population
 #  known lambda (aka rate)
 #  Take random sample and estimate lambda by MLE 
 #  Demonstrate that the MLE is asymptotically normal
-#-----------------------------------
+
 
 #Define a "population" from an Exponential distribution
 x.pop = rexp(n=10000, rate=15)
@@ -386,7 +387,7 @@ for (i in 1:1000)
 {
 x.sample = sample(x.pop, size=100, replace=TRUE)
 
-logL.fn1 = function(z, scale){ln.fz = dexp(z, scale, log = TRUE)}
+logL.fn1 = function(z, scale){dexp(z, scale, log = TRUE)}
 
 lambda = seq(1, 30, by=0.1)
 
@@ -409,9 +410,6 @@ segments(x0=median.lambda, y0=0, x1=median.lambda, y1=300, col="blue")
 segments(x0=lcl.lambda, y0=0, x1=lcl.lambda, y1=300, col="red")
 segments(x0=ucl.lambda, y0=0, x1=ucl.lambda, y1=300, col="red")
 
-#-----------------------------------
 
 
- 
-
-
+# END CODE ####################################################################
